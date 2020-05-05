@@ -105,18 +105,8 @@ public:
         return data;
     }
 
-    // Returns matrix-vector multiplication result
-    void matMulVec(const Vector<FloatT>& vec, Vector<FloatT>* output) const {
-        assert(output);
-        assert(vec.getSize() == numRows);
-        assert(vec.getSize() == output->getSize());
-
-        for (size_t i = 0; i < numRows; ++i) {
-            for (size_t j = 0; j < numCols; ++j) {
-                (*output)(i) += vec(j) * (*this)(i, j);
-            }
-        }
-    }
+    // Returns transposed matrix-vector multiplication result
+    void transMatMulVec(const Vector<FloatT>& vec, Vector<FloatT>* output) const;
 
     const size_t& getNumRows() const {
         return numRows;

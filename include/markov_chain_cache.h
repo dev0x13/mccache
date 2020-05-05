@@ -147,11 +147,13 @@ public:
             float sizesAccumulator = 0;
 
             for (const auto& i : evictionCandidates) {
-                if (itemsInCacheSizes.count(i) != 0) {
-                    sizesAccumulator += itemsInCacheSizes[i];
+                const KeyType& tmpKey = stateToKeyMap[i];
+
+                if (itemsInCacheSizes.count(tmpKey) != 0) {
+                    sizesAccumulator += itemsInCacheSizes[tmpKey];
                 }
 
-                if (i == key) {
+                if (tmpKey == key) {
                     break;
                 }
             }

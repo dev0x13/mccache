@@ -70,31 +70,11 @@ public:
     }
 
     // Returns the sum of vector elements
-    FloatT sum() const {
-        FloatT sum = 0;
+    FloatT sum() const;
 
-        for (size_t i = 0; i < size; ++i) {
-            sum += data[i];
-        }
+    void mulElements(const Vector<FloatT>& other);
 
-        return sum;
-    }
-
-    void mulElements(const Vector<FloatT>& other) {
-        assert(size == other.size);
-
-        for (size_t i = 0; i < size; ++i) {
-            data[i] *= other(i);
-        }
-    }
-
-    void addElements(const Vector<FloatT>& other) {
-        assert(size == other.size);
-
-        for (size_t i = 0; i < size; ++i) {
-            data[i] += other(i);
-        }
-    }
+    void addElements(const Vector<FloatT>& other);
 
     void copyFromVector(const Vector<FloatT>& other) {
         assert(size == other.size);
@@ -103,11 +83,7 @@ public:
     }
 
     // Multiplies each elements by alpha
-    void scale(FloatT alpha) {
-        for (size_t i = 0; i < size; ++i) {
-            data[i] *= alpha;
-        }
-    }
+    void scale(FloatT alpha);
 
     const FloatT* getData() const {
         return data;

@@ -80,7 +80,7 @@ Vector<float> EvolvingMarkovChain::predictNextState(const Vector<float>& current
 
     Vector<float> nextState(numStates);
 
-    stohasticMatrix.matMulVec(currentState, &nextState);
+    stohasticMatrix.transMatMulVec(currentState, &nextState);
 
     return nextState;
 }

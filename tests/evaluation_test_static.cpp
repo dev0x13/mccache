@@ -4,6 +4,10 @@
 
 #include <markov_chain_cache.h>
 
+#ifdef USE_MKL
+#include <mkl.h>
+#endif
+
 struct GetRequest {
     size_t timestamp;
     size_t itemId;
@@ -32,6 +36,10 @@ int main(int argc, char* argv[]) {
                   << "<access threshold> <forecast length>"  << std::endl;
         return 1;
     }
+
+#ifdef USE_MKL
+    mkl_set_num_threads(mkl_get_max_threads());
+#endif
 
     std::ifstream input(argv[1]);
     std::vector<GetRequest> trace = parseTrace(input);
@@ -70,7 +78,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "Object hit ratio: " <<  (float) numHits / trace.size() << std::endl;
-    std::cout << "Byte hit ratio: "   <<  numHitsBytes / totalSize       << std::endl;
+    std::cout << "Byte hit ratio: "   <<  numHitsBytes / totalSize        << std::endl;
 
     return 0;
 }

@@ -1,0 +1,24 @@
+Downloaded from http://www.cs.bu.edu/techreports/abstracts/1999-011 and converted using
+webcachesim (https://github.com/dasebe/webcachesim).
+
+Title: BU Computer Science 1998 Proxy Trace
+Author: Adam D. Bradley <artdodge@cs.bu.edu>
+Date: September 7, 1999
+
+Abstract:
+
+In a recent paper (Changes in Web Client Access Patterns:
+Characteristics and Caching Implications by Barford, Bestavros,
+Bradley, and Crovella) we performed a variety of analyses upon user
+traces collected in the Boston University Computer Science department
+in 1995 and 1998.  A sanitized version of the 1995 trace has been
+publicly available for some time; the 1998 trace has now been
+sanitized, and is available from:
+
+      http://www.cs.bu.edu/techreports/1999-011-usertrace-98.gz
+      ftp://ftp.cs.bu.edu/techreports/1999-011-usertrace-98.gz
+
+This memo discusses the format of this public version of the log,
+and includes additional discussion of how the data was collected,
+how the log was sanitized, what this log is and is not useful for,
+and areas of potential future research interest.
