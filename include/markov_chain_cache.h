@@ -30,19 +30,19 @@ public:
         assert(keyToStateMap.count(key) != 0);
 
         if (itemsInCacheSizes.count(key) != 0) {
-            // DS is already in RAM, nothing to do
+            // Element is already in cache, nothing to do
             updateTransitionStats(key);
             return true;
         }
 
-        // The logic in this method is quite similar to the one in `processSaving` method,
-        // so check the detailed comments on logic in `processSaving`.
+        // The logic in this method is quite similar to the one in `processSetRequest` method,
+        // so check the detailed comments on logic in `processSetRequest`.
 
         const float itemSize    = itemsNotInCacheSizes.at(key);
         const float spaceToFree = (currentCacheSize + itemSize) - cfg.cacheCapacity;
 
         if (spaceToFree > 0) {
-            const size_t markovChainCurrentState = !prevRequestedItemKeyState ? 0 : *prevRequestedItemKeyState;
+            const size_t markovChainCurrentState = keyToStateMap[key];
             const size_t markovChainNumStates    = markovChain.getNumStates();
 
             Vector<float> costs(markovChainNumStates, FillType::ZEROS);
@@ -89,7 +89,7 @@ public:
         assert(itemSize <= cfg.cacheCapacity);
         assert(itemSize > 0);
 
-        // We register the new state corresponding to dataset which we are saving now
+        // We register the new state corresponding to th element which we are saving now
         // beforehand to determine if we could save it on disk right away without a need
         // to free space in cache.
         addNewState(key, itemSize);
@@ -99,7 +99,6 @@ public:
         if (spaceToFree > 0) {
             const size_t markovChainNumStates    = markovChain.getNumStates();
 
-            // (Markov chain state corresponding to dsIndex) == dsIndex - 1
             const size_t markovChainCurrentState = !prevRequestedItemKeyState ? 0 : *prevRequestedItemKeyState;
 
             Vector<float> costs(markovChainNumStates, FillType::ZEROS);
@@ -127,7 +126,7 @@ public:
                 }
             }
 
-            // Weight probabilities by the corresponding dataset sizes
+            // Weight probabilities by the corresponding element sizes
             costs.mulElements(wrappedDsSizes);
 
             // Sort costs in the ascending order
@@ -139,11 +138,11 @@ public:
                 return costs(i) < costs(j) || (costs(i) == costs(j) && i == markovChainStateForSavingItem);
             });
 
-            // Datasets are being unloaded according to their indexes in the `ind` vector
+            // Elements are being unloaded according to their indexes in the `ind` vector
             // until the required number of bytes is freed. There might be a situation when
-            // the cost of replacing the dataset currently being saved is that small so
+            // the cost of replacing the element currently being saved is that small so
             // it is a candidate to replace. In such case there is no sense of replacing
-            // any datasets from cache, so we just place the freshly added dataset to disk right away/
+            // any elements from cache, so we just place the freshly added element to disk right away
             float sizesAccumulator = 0;
 
             for (const auto& i : evictionCandidates) {
@@ -211,7 +210,7 @@ private:
         itemsSizes.push_back(size);
     }
 
-    // Frees require amount of bytes by unloading some datasets from memory to disk
+    // Frees require amount of bytes by unloading some elements from memory to disk
     void evict(float spaceToFree, const std::vector<size_t>& itemsToEvictStates) {
         assert(spaceToFree <= cfg.cacheCapacity);
         assert(spaceToFree > 0);
@@ -254,10 +253,10 @@ private:
 
     float currentCacheSize = 0;
 
-    // We use this vector for storing dataset sizes, because we multiply transitions
-    // probabilities by dataset sizes in element wise fashion in order to obtain the
+    // We use this vector for storing element sizes, because we multiply transitions
+    // probabilities by element sizes in element wise fashion in order to obtain the
     // costs of replacing by mistake. This vector allows to do it without copying data.
-    // datasetsInMemorySizes map is only used for O(1) search.
+    // itemsInCacheSizes map is only used for O(1) search.
     std::vector<float> itemsSizes;
 
     std::unordered_map<KeyType, size_t> keyToStateMap;
