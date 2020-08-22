@@ -3,7 +3,7 @@
 This repository contains a reference implementation for time-homogeneous Markov chain based cache,
 which was created as a part of my master degree dissertation.
 
-**Algorithm description will be published soon.**
+Algorithm description is available in Russian language as a part of the [dissertation](https://elib.spbstu.ru/dl/3/2020/vr/vr20-1357.pdf/info) (pp. 60-68). If the document is not available, please contact me in order to receive a copy.
 
 ## Software specific notes
 
