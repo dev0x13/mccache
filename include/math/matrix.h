@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <ostream>
@@ -10,127 +11,120 @@
 // Simple row-major matrix class
 template <typename FloatT>
 class Matrix {
-public:
-    Matrix<FloatT>& operator=(const Matrix<FloatT>& other) = delete;
+ public:
+  Matrix<FloatT>& operator=(const Matrix<FloatT>& other) = delete;
 
-    Matrix(size_t numRows, size_t numCols, FillType fillType = FillType::UNITIALIZED)
-        : numRows(numRows), numCols(numCols)
-    {
-        assert(numRows);
-        assert(numCols);
-        assert(fillType == FillType::ZEROS || fillType == FillType::UNITIALIZED);
+  Matrix(size_t num_rows, size_t num_cols,
+         FillType fill_type = FillType::kUninitialized)
+      : num_rows_(num_rows), num_cols_(num_cols) {
+    assert(num_rows);
+    assert(num_cols);
+    assert(fill_type == FillType::kZeros || fill_type == FillType::kUninitialized);
 
-        switch (fillType) {
-            case FillType::ZEROS:
-                data = new FloatT[numCols * numRows]();
-                break;
-            case FillType::UNITIALIZED:
-                data = new FloatT[numCols * numRows];
-                break;
+    switch (fill_type) {
+      case FillType::kZeros:
+        data_ = new FloatT[num_cols_ * num_rows_]();
+        break;
+      case FillType::kUninitialized:
+        data_ = new FloatT[num_cols_ * num_rows_];
+        break;
+    }
+
+    assert(data_);
+  }
+
+  Matrix() = default;
+
+  FloatT operator()(size_t row, size_t col) const {
+    assert(row < num_rows_);
+    assert(col < num_cols_);
+
+    return data_[row * num_cols_ + col];
+  }
+
+  FloatT& operator()(size_t row, size_t col) {
+    assert(row < num_rows_);
+    assert(col < num_cols_);
+
+    return data_[row * num_cols_ + col];
+  }
+
+  void Resize(size_t newNumRows, size_t newNumCols, ResizeType resizeType) {
+    assert(newNumRows);
+    assert(newNumCols);
+    assert(resizeType == ResizeType::kZeros ||
+           resizeType == ResizeType::kUninitialized ||
+           resizeType == ResizeType::kCopy);
+
+    if (newNumCols == num_cols_ && newNumRows == num_rows_) {
+      return;
+    }
+
+    FloatT* newData = nullptr;
+
+    switch (resizeType) {
+      case ResizeType::kZeros:
+        newData = new FloatT[newNumRows * newNumCols]();
+        break;
+      case ResizeType::kUninitialized:
+        newData = new FloatT[newNumRows * newNumCols];
+        break;
+      case ResizeType::kCopy:
+        newData = new FloatT[newNumRows * newNumCols]();
+
+        if (newNumRows > num_rows_ && newNumCols > num_cols_) {
+          for (size_t i = 0; i < num_rows_; ++i) {
+            std::copy(data_ + i * num_cols_, data_ + (i + 1) * num_cols_,
+                      newData + i * newNumCols);
+          }
         }
 
-        assert(data);
+        break;
     }
 
-    Matrix() = default;
+    assert(newData);
+    delete[] data_;
+    data_ = newData;
+    num_rows_ = newNumRows;
+    num_cols_ = newNumCols;
+  }
 
-    FloatT operator()(size_t row, size_t col) const {
-        assert(row < numRows);
-        assert(col < numCols);
+  Vector<FloatT> Row(size_t row) {
+    assert(row < num_rows_);
 
-        return data[row * numCols + col];
+    return {data_ + row * num_cols_, num_cols_};
+  }
+
+  Vector<FloatT> Row(size_t row) const {
+    assert(row < num_rows_);
+
+    return {data_ + row * num_cols_, num_cols_};
+  }
+
+  const FloatT* GetData() const { return data_; }
+
+  FloatT* GetData() { return data_; }
+
+  // Returns transposed matrix-vector multiplication result
+  void TransMatMulVec(const Vector<FloatT>& vec, Vector<FloatT>* output) const;
+
+  const size_t& GetNumRows() const { return num_rows_; }
+
+  const size_t& GetNumCols() const { return num_cols_; }
+
+  friend std::ostream& operator<<(std::ostream& os, const Matrix<FloatT>& obj) {
+    for (size_t i = 0; i < obj.numRows; ++i) {
+      os << obj.row(i) << "\n";
     }
 
-    FloatT& operator()(size_t row, size_t col) {
-        assert(row < numRows);
-        assert(col < numCols);
+    return os;
+  }
 
-        return data[row * numCols + col];
-    }
+  ~Matrix() { delete[] data_; }
 
-    void resize(size_t newNumRows, size_t newNumCols, ResizeType resizeType) {
-        assert(newNumRows);
-        assert(newNumCols);
-        assert(resizeType == ResizeType::ZEROS || resizeType == ResizeType::UNITIALIZED || resizeType == ResizeType::COPY);
+ private:
+  size_t num_rows_ = 0;
+  size_t num_cols_ = 0;
 
-        if (newNumCols == numCols && newNumRows == numRows) {
-            return;
-        }
-
-        FloatT *newData = nullptr;
-
-        switch (resizeType) {
-            case ResizeType::ZEROS:
-                newData = new FloatT[newNumRows * newNumCols]();
-                break;
-            case ResizeType::UNITIALIZED:
-                newData = new FloatT[newNumRows * newNumCols];
-                break;
-            case ResizeType::COPY:
-                newData = new FloatT[newNumRows * newNumCols]();
-
-                if (newNumRows > numRows && newNumCols > numCols) {
-                    for (size_t i = 0; i < numRows; ++i) {
-                        std::copy(data + i * numCols, data + (i + 1) * numCols, newData + i * newNumCols);
-                    }
-                }
-
-                break;
-        }
-
-        assert(newData);
-        delete[] data;
-        data = newData;
-        numRows = newNumRows;
-        numCols = newNumCols;
-    }
-
-    Vector<FloatT> row(size_t row) {
-        assert(row < numRows);
-
-        return { data + row * numCols, numCols };
-    }
-
-    Vector<FloatT> row(size_t row) const {
-        assert(row < numRows);
-
-        return { data + row * numCols, numCols };
-    }
-
-    const FloatT* getData() const {
-        return data;
-    }
-
-    FloatT* getData() {
-        return data;
-    }
-
-    // Returns transposed matrix-vector multiplication result
-    void transMatMulVec(const Vector<FloatT>& vec, Vector<FloatT>* output) const;
-
-    const size_t& getNumRows() const {
-        return numRows;
-    }
-
-    const size_t& getNumCols() const {
-        return numCols;
-    }
-
-    friend std::ostream &operator<<(std::ostream& os, const Matrix<FloatT>& obj) {
-        for (size_t i = 0; i < obj.numRows; ++i) {
-            os << obj.row(i) << "\n";
-        }
-
-        return os;
-    }
-
-    ~Matrix() {
-        delete[] data;
-    }
-
-private:
-    size_t numRows = 0;
-    size_t numCols = 0;
-
-    FloatT* data{ nullptr };
+  FloatT* data_{nullptr};
 };

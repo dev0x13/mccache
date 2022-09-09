@@ -1,12 +1,5 @@
 #pragma once
 
-enum class FillType {
-    ZEROS,
-    UNITIALIZED
-};
+enum class FillType { kZeros, kUninitialized };
 
-enum class ResizeType {
-    ZEROS,
-    UNITIALIZED,
-    COPY
-};
+enum class ResizeType { kZeros, kUninitialized, kCopy };

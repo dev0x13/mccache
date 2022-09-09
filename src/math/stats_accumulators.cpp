@@ -4,117 +4,123 @@
  * TransitionsBasedStatsAccumulator *
  ************************************/
 
-void TransitionsBasedStatsAccumulator::addState() {
-    ++numStates;
+void TransitionsBasedStatsAccumulator::AddState() {
+  ++num_states_;
 
-    // We initialize new length with zeros
-    totalNumbersOfForwardTransitions.push_back(0);
-    totalNumbersOfBackwardTransitions.push_back(0);
+  // We initialize new length with zeros
+  total_numbers_of_forward_transitions_.push_back(0);
+  total_numbers_of_backward_transitions_.push_back(0);
 }
 
-void TransitionsBasedStatsAccumulator::accumulateTransition(size_t state1, size_t state2) {
-    assert(state1 < numStates);
-    assert(state2 < numStates);
+void TransitionsBasedStatsAccumulator::AccumulateTransition(size_t state1,
+                                                            size_t state2) {
+  assert(state1 < num_states_);
+  assert(state2 < num_states_);
 
-    if (state1 == state2) {
-        // Self-transition
-        totalNumberOfSelfTransitions += 1;
-    } else if (state1 < state2) {
-        // Forward transition
-        totalNumbersOfForwardTransitions[state2 - state1] += 1;
-    } else if (state1 > state2) {
-        // Backward transition
-        totalNumbersOfBackwardTransitions[state1 - state2] += 1;
-    }
+  if (state1 == state2) {
+    // Self-transition
+    total_number_of_self_transitions_ += 1;
+  } else if (state1 < state2) {
+    // Forward transition
+    total_numbers_of_forward_transitions_[state2 - state1] += 1;
+  } else if (state1 > state2) {
+    // Backward transition
+    total_numbers_of_backward_transitions_[state1 - state2] += 1;
+  }
 
-    ++totalNumberOfTransitions;
+  ++total_number_of_transitions_;
 }
 
-void TransitionsBasedStatsAccumulator::getTransitionProbabilitiesEstimate(size_t state, Vector<float>* transitions) {
-    assert(transitions);
-    assert(transitions->getSize() == numStates);
+void TransitionsBasedStatsAccumulator::GetTransitionProbabilitiesEstimate(
+    size_t state, Vector<float>* transitions) {
+  assert(transitions);
+  assert(transitions->GetSize() == num_states_);
 
-    float *nextStateData = transitions->getData();
-    const float* forwardTransitionsData  = totalNumbersOfForwardTransitions.data();
+  float* next_state_data = transitions->GetData();
+  const float* forward_transition_data =
+      total_numbers_of_forward_transitions_.data();
 
-    /*
-     * The transitions probabilities vector is filled as follows:
-     *
-     * < - - - - - - - - - - - - - <state> - - - - - - - - - - - - - - >
-     *           ^                    ^                  ^
-     * |backward transitions| |self transition| |forward transitions|
-     *
-     * So the transitions[N] element contains the probability of state -> N transition.
-     */
+  /*
+   * The transitions probabilities vector is filled as follows:
+   *
+   * < - - - - - - - - - - - - - <state> - - - - - - - - - - - - - - >
+   *           ^                    ^                  ^
+   * |backward transitions| |self transition| |forward transitions|
+   *
+   * So the transitions[N] element contains the probability of state -> N
+   * transition.
+   */
 
-    if (state != 0) {
-        // Backward transitions are copied in reversed order as it contains transition lengths
-        // in the ascending order.
-        std::copy(
-                totalNumbersOfBackwardTransitions.rbegin() + numStates - state - 1,
-                totalNumbersOfBackwardTransitions.rend(),
-                nextStateData
-        );
-    }
+  if (state != 0) {
+    // Backward transitions are copied in reversed order as it contains
+    // transition lengths in the ascending order.
+    std::copy(total_numbers_of_backward_transitions_.rbegin() + num_states_ -
+                  state - 1,
+              total_numbers_of_backward_transitions_.rend(), next_state_data);
+  }
 
-    if (state != numStates - 1) {
-        std::copy(
-                forwardTransitionsData + 1,
-                forwardTransitionsData + (numStates - state),
-                nextStateData + state + 1
-        );
-    }
+  if (state != num_states_ - 1) {
+    std::copy(forward_transition_data + 1,
+              forward_transition_data + (num_states_ - state),
+              next_state_data + state + 1);
+  }
 
-    (*transitions)(state) = totalNumberOfSelfTransitions;
+  (*transitions)(state) = total_number_of_self_transitions_;
 
-    // Normalize, but it doesn't mean that sum of elements is equal to 1 (!)
-    transitions->scale(1.0 / totalNumberOfTransitions);
+  // Normalize, but it doesn't mean that sum of elements is equal to 1 (!)
+  transitions->Scale(1.0 / total_number_of_transitions_);
 }
 
-float TransitionsBasedStatsAccumulator::getTransitionProbabilityEstimate(size_t state1, size_t state2) const {
-    assert(state1 < numStates);
-    assert(state2 < numStates);
+float TransitionsBasedStatsAccumulator::GetTransitionProbabilityEstimate(
+    size_t state1, size_t state2) const {
+  assert(state1 < num_states_);
+  assert(state2 < num_states_);
 
-    if (state1 == state2) {
-        return totalNumberOfSelfTransitions / totalNumberOfTransitions;
-    } else if (state1 < state2) {
-        return totalNumbersOfForwardTransitions[state2 - state1] / totalNumberOfTransitions;
-    } else { /* if (state1 > state2) { */
-        return totalNumbersOfBackwardTransitions[state1 - state2] / totalNumberOfTransitions;
-    }
+  if (state1 == state2) {
+    return total_number_of_self_transitions_ / total_number_of_transitions_;
+  } else if (state1 < state2) {
+    return total_numbers_of_forward_transitions_[state2 - state1] /
+           total_number_of_transitions_;
+  } else { /* if (state1 > state2) { */
+    return total_numbers_of_backward_transitions_[state1 - state2] /
+           total_number_of_transitions_;
+  }
 }
 
 /*******************************
  * StatesBasedStatsAccumulator *
  *******************************/
 
-void StatesBasedStatsAccumulator::addState() {
-    transitionCounters.push_back(0);
-    ++totalNumberOfTransitions;
+void StatesBasedStatsAccumulator::AddState() {
+  transition_counters_.push_back(0);
+  ++total_number_of_transitions_;
 }
 
-void StatesBasedStatsAccumulator::accumulateTransition(size_t, size_t state2) {
-    assert(state2 < transitionCounters.size());
+void StatesBasedStatsAccumulator::AccumulateTransition(size_t, size_t state2) {
+  assert(state2 < transition_counters_.size());
 
-    transitionCounters[state2] += 1;
+  transition_counters_[state2] += 1;
 }
 
-// Basically this method yields the average probabilities of transitions to states, i.e.
-// it represents the "popularity" of states.
-void StatesBasedStatsAccumulator::getTransitionProbabilitiesEstimate(size_t, Vector<float>* transitions) {
-    assert(transitions);
-    assert(transitions->getSize() == transitionCounters.size());
+// Basically this method yields the average probabilities of transitions to
+// states, i.e. it represents the "popularity" of states.
+void StatesBasedStatsAccumulator::GetTransitionProbabilitiesEstimate(
+    size_t, Vector<float>* transitions) {
+  assert(transitions);
+  assert(transitions->GetSize() == transition_counters_.size());
 
-    float *nextStateData = transitions->getData();
-    const float* transitionsData = transitionCounters.data();
+  float* next_state_data = transitions->GetData();
+  const float* transitions_data = transition_counters_.data();
 
-    std::copy(transitionsData, transitionsData + transitionCounters.size(), nextStateData);
+  std::copy(transitions_data, transitions_data + transition_counters_.size(),
+            next_state_data);
 
-    transitions->scale(1.0 / totalNumberOfTransitions);
+  transitions->Scale(1.0 / total_number_of_transitions_);
 }
 
-float StatesBasedStatsAccumulator::getTransitionProbabilityEstimate(size_t, size_t state2) const {
-    assert(state2 < transitionCounters.size());
+float StatesBasedStatsAccumulator::GetTransitionProbabilityEstimate(
+    size_t, size_t state2) const {
+  assert(state2 < transition_counters_.size());
 
-    return transitionCounters[state2];
+  return transition_counters_[state2];
 }

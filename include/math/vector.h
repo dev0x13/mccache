@@ -1,121 +1,118 @@
 #pragma once
 
-#include <ostream>
+#include <algorithm>
 #include <cassert>
+#include <ostream>
+#include <utility>
 
 #include "linalg_common.h"
 
 // Simple vector class
 template <typename FloatT>
 class Vector {
-public:
-    explicit Vector(size_t size, FillType fillType = FillType::UNITIALIZED)
-        : size(size), ownsData(true)
-    {
-        assert(size);
-        assert(fillType == FillType::ZEROS || fillType == FillType::UNITIALIZED);
+ public:
+  explicit Vector(size_t size, FillType fill_type = FillType::kUninitialized)
+      : size_(size), owns_data_(true) {
+    assert(size);
+    assert(fill_type == FillType::kZeros ||
+           fill_type == FillType::kUninitialized);
 
-        switch (fillType) {
-            case FillType::ZEROS:
-                data = new FloatT[size]();
-                break;
-            case FillType::UNITIALIZED:
-                data = new FloatT[size];
-                break;
-        }
-
-        assert(data);
+    switch (fill_type) {
+      case FillType::kZeros:
+        data_ = new FloatT[size_]();
+        break;
+      case FillType::kUninitialized:
+        data_ = new FloatT[size_];
+        break;
     }
 
-    Vector(const Vector<FloatT>& other) : size(other.size), ownsData(true) {
-        data = new FloatT[size];
+    assert(data_);
+  }
 
-        assert(data);
+  Vector(const Vector<FloatT>& other) : size_(other.size_), owns_data_(true) {
+    data_ = new FloatT[size_];
 
-        std::copy(other.data, other.data + size, data);
+    assert(data_);
+
+    std::copy(other.data_, other.data_ + size_, data_);
+  }
+
+  Vector() = default;
+
+  Vector<FloatT>& operator=(Vector<FloatT> other) {
+    if (other.owns_data_) {
+      std::swap(data_, other.data_);
+      std::swap(size_, other.size_);
+      std::swap(owns_data_, other.owns_data_);
+    } else {
+      if (owns_data_) {
+        delete[] data_;
+      }
+
+      owns_data_ = true;
+      size_ = other.size_;
+      data_ = new FloatT[size_];
+      std::copy(other.data_, other.data_ + size_, data_);
     }
 
-    Vector() = default;
+    return *this;
+  }
 
-    Vector<FloatT>& operator=(Vector<FloatT> other) {
-        if (other.ownsData) {
-            std::swap(data, other.data);
-            std::swap(size, other.size);
-            std::swap(ownsData, other.ownsData);
-        } else {
-            if (ownsData) {
-                delete[] data;
-            }
+  Vector(FloatT* data, size_t size)
+      : data_(data), size_(size), owns_data_(false) {}
 
-            ownsData = true;
-            size = other.size;
-            data = new FloatT[size];
-            std::copy(other.data, other.data + size, data);
-        }
+  FloatT operator()(size_t i) const {
+    assert(i < size_);
+    return data_[i];
+  }
 
-        return *this;
+  FloatT& operator()(size_t i) {
+    assert(i < size_);
+    return data_[i];
+  }
+
+  // Returns the sum of vector elements
+  FloatT Sum() const;
+
+  void MulElements(const Vector<FloatT>& other);
+
+  void AddElements(const Vector<FloatT>& other);
+
+  void CopyFromVector(const Vector<FloatT>& other) {
+    assert(size_ == other.size_);
+
+    std::copy(other.data_, other.data_ + size_, data_);
+  }
+
+  // Multiplies each element by alpha
+  void Scale(FloatT alpha);
+
+  const FloatT* GetData() const { return data_; }
+
+  FloatT* GetData() { return data_; }
+
+  const size_t& GetSize() const { return size_; }
+
+  ~Vector() {
+    if (owns_data_) {
+      delete[] data_;
+    }
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const Vector<FloatT>& obj) {
+    os << "[";
+
+    for (size_t i = 0; i < obj.size_; ++i) {
+      os << " " << obj(i);
     }
 
-    Vector(FloatT* data, size_t size)
-            : data(data), size(size), ownsData(false) {}
+    os << " ]";
 
-    FloatT operator()(size_t i) const {
-        assert(i < size);
-        return data[i];
-    }
+    return os;
+  }
 
-    FloatT& operator()(size_t i) {
-        assert(i < size);
-        return data[i];
-    }
-
-    // Returns the sum of vector elements
-    FloatT sum() const;
-
-    void mulElements(const Vector<FloatT>& other);
-
-    void addElements(const Vector<FloatT>& other);
-
-    void copyFromVector(const Vector<FloatT>& other) {
-        assert(size == other.size);
-
-        std::copy(other.data, other.data + size, data);
-    }
-
-    // Multiplies each elements by alpha
-    void scale(FloatT alpha);
-
-    const FloatT* getData() const {
-        return data;
-    }
-
-    FloatT* getData(){
-        return data;
-    }
-
-    const size_t& getSize() const {
-        return size;
-    }
-
-    ~Vector() {
-        if (ownsData) {
-            delete[] data;
-        }
-    }
-
-    friend std::ostream &operator<<(std::ostream& os, const Vector<FloatT>& obj) {
-        os << "[";
-
-        for (size_t i = 0; i < obj.size; ++i) {
-            os << " " << obj(i);
-        }
-
-        os << " ]";
-
-        return os;
-    }
-private:
-    FloatT* data{ nullptr };
-    size_t size = 0;
-    bool ownsData = true;
+ private:
+  FloatT* data_{nullptr};
+  size_t size_ = 0;
+  bool owns_data_ = true;
 };

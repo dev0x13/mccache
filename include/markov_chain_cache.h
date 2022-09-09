@@ -1,269 +1,291 @@
 #pragma once
 
-#include <unordered_map>
-#include <numeric>
 #include <algorithm>
+#include <numeric>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 #include "math/evolving_markov_chain.h"
 
 template <typename KeyType>
 class CacheDelegate {
-public:
-    virtual void admitItem(const KeyType& key) const = 0;
+ public:
+  virtual void AdmitItem(const KeyType& key) const = 0;
 
-    virtual void evictItem(const KeyType& key) const = 0;
+  virtual void EvictItem(const KeyType& key) const = 0;
 };
 
 struct MarkovChainCacheConfig {
-    float cacheCapacity = 512;
-    std::string statsAccumulatorType = "transitions";
-    size_t accessesThreshold = 5;
+  float cache_capacity = 512;
+  std::string stats_accumulator_type = "transitions";
+  size_t accesses_threshold = 5;
 
-    // Cache parameter for regulating Markov chain forecast length
-    size_t forecastLength = 1;
+  // Cache parameter for regulating Markov chain forecast length
+  size_t forecast_length = 1;
 };
 
 template <typename KeyType>
 class MarkovChainCache {
-public:
-    bool processGetRequest(const KeyType& key) {
-        assert(keyToStateMap.count(key) != 0);
+ public:
+  bool ProcessGetRequest(const KeyType& key) {
+    assert(key_to_state_map_.count(key) != 0);
 
-        if (itemsInCacheSizes.count(key) != 0) {
-            // Element is already in cache, nothing to do
-            updateTransitionStats(key);
-            return true;
-        }
-
-        // The logic in this method is quite similar to the one in `processSetRequest` method,
-        // so check the detailed comments on logic in `processSetRequest`.
-
-        const float itemSize    = itemsNotInCacheSizes.at(key);
-        const float spaceToFree = (currentCacheSize + itemSize) - cfg.cacheCapacity;
-
-        if (spaceToFree > 0) {
-            const size_t markovChainCurrentState = keyToStateMap[key];
-            const size_t markovChainNumStates    = markovChain.getNumStates();
-
-            Vector<float> costs(markovChainNumStates, FillType::ZEROS);
-            Vector<float> wrappedDsSizes(itemsSizes.data(), itemsSizes.size());
-
-            if (cfg.forecastLength == 1) {
-                markovChain.predictNextState(markovChainCurrentState, &costs);
-            } else {
-                Vector<float> state(markovChainNumStates, FillType::ZEROS);
-                state(markovChainCurrentState) = 1;
-
-                for (size_t i = 0; i < cfg.forecastLength; ++i) {
-                    state = markovChain.predictNextState(state);
-                    costs.addElements(state);
-                }
-            }
-
-            costs.mulElements(wrappedDsSizes);
-
-            std::vector<size_t> evictionCandidatesStates(costs.getSize());
-            std::iota(evictionCandidatesStates.begin(), evictionCandidatesStates.end(), 0);
-
-            std::sort(evictionCandidatesStates.begin(), evictionCandidatesStates.end(), [&](size_t i, size_t j) {
-                return costs(i) < costs(j);
-            });
-
-            evict(spaceToFree, evictionCandidatesStates);
-
-            itemsNotInCacheSizes.erase(key);
-        }
-
-        if (delegate) {
-            delegate->admitItem(key);
-        }
-
-        itemsInCacheSizes[key] = itemSize;
-        currentCacheSize += itemSize;
-        updateTransitionStats(key);
-
-        return false;
+    if (items_in_cache_sizes_.count(key) != 0) {
+      // Element is already in cache, nothing to do
+      UpdateTransitionStats(key);
+      return true;
     }
 
-    void processSetRequest(const KeyType& key, float itemSize) {
-        assert(itemSize <= cfg.cacheCapacity);
-        assert(itemSize > 0);
+    // The logic in this method is quite similar to the one in
+    // `ProcessSetRequest` method, so check the detailed comments on logic in
+    // `ProcessSetRequest`.
 
-        // We register the new state corresponding to th element which we are saving now
-        // beforehand to determine if we could save it on disk right away without a need
-        // to free space in cache.
-        addNewState(key, itemSize);
+    const float item_size = items_not_in_cache_sizes_.at(key);
+    const float space_to_free =
+        (current_cache_size_ + item_size) - cfg_.cache_capacity;
 
-        const float spaceToFree = (currentCacheSize + itemSize) - cfg.cacheCapacity;
+    if (space_to_free > 0) {
+      const size_t markov_chain_current_state = key_to_state_map_[key];
+      const size_t markov_chain_num_states = markov_chain_.GetNumStates();
 
-        if (spaceToFree > 0) {
-            const size_t markovChainNumStates    = markovChain.getNumStates();
+      Vector<float> costs(markov_chain_num_states, FillType::kZeros);
+      Vector<float> wrapped_item_sizes(item_sizes_.data(), item_sizes_.size());
 
-            const size_t markovChainCurrentState = !prevRequestedItemKeyState ? 0 : *prevRequestedItemKeyState;
+      if (cfg_.forecast_length == 1) {
+        markov_chain_.PredictNextState(markov_chain_current_state, &costs);
+      } else {
+        Vector<float> state(markov_chain_num_states, FillType::kZeros);
+        state(markov_chain_current_state) = 1;
 
-            Vector<float> costs(markovChainNumStates, FillType::ZEROS);
-            Vector<float> wrappedDsSizes(itemsSizes.data(), itemsSizes.size());
+        for (size_t i = 0; i < cfg_.forecast_length; ++i) {
+          state = markov_chain_.PredictNextState(state);
+          costs.AddElements(state);
+        }
+      }
 
-            if (cfg.forecastLength == 1) {
-                // In this case we are able to use the more efficient way to make a prediction
-                markovChain.predictNextState(markovChainCurrentState, &costs);
+      costs.MulElements(wrapped_item_sizes);
 
-                // (markovChainNumStates - 1) state is the state corresponding to the dataset being saved.
-                // Transition probability to it is apparently zero, but most likely we don't want to instantly
-                // move it to disk. Instead we "fix" the probability with a probability given by stats accumulator.
-                costs(markovChainNumStates - 1) = markovChain.getTransitionProbabilityFromAccumulator(markovChainCurrentState, markovChainNumStates - 1);
-            } else {
-                // Fill the vector representing current state
-                Vector<float> state(markovChainNumStates, FillType::ZEROS);
-                state(markovChainCurrentState) = 1;
+      std::vector<size_t> eviction_candidate_states(costs.GetSize());
+      std::iota(eviction_candidate_states.begin(),
+                eviction_candidate_states.end(), 0);
 
-                // Make predictions regarding to forecastLength, and sum the probabilities.
-                // It is not that formal, but we interpret this as a cumulative cost of replacing
-                // by mistake.
-                for (size_t i = 0; i < cfg.forecastLength; ++i) {
-                    state = markovChain.predictNextState(state);
-                    costs.addElements(state);
-                }
-            }
+      std::sort(eviction_candidate_states.begin(),
+                eviction_candidate_states.end(),
+                [&](size_t i, size_t j) { return costs(i) < costs(j); });
 
-            // Weight probabilities by the corresponding element sizes
-            costs.mulElements(wrappedDsSizes);
+      Evict(space_to_free, eviction_candidate_states);
 
-            // Sort costs in the ascending order
-            std::vector<size_t> evictionCandidates(costs.getSize());
-            std::iota(evictionCandidates.begin(), evictionCandidates.end(), 0);
+      items_not_in_cache_sizes_.erase(key);
+    }
 
-            const size_t markovChainStateForSavingItem = keyToStateMap[key];
-            std::sort(evictionCandidates.begin(), evictionCandidates.end(), [&](size_t i, size_t j) {
-                return costs(i) < costs(j) || (costs(i) == costs(j) && i == markovChainStateForSavingItem);
-            });
+    if (delegate_) {
+      delegate_->AdmitItem(key);
+    }
 
-            // Elements are being unloaded according to their indexes in the `ind` vector
-            // until the required number of bytes is freed. There might be a situation when
-            // the cost of replacing the element currently being saved is that small so
-            // it is a candidate to replace. In such case there is no sense of replacing
-            // any elements from cache, so we just place the freshly added element to disk right away
-            float sizesAccumulator = 0;
+    items_in_cache_sizes_[key] = item_size;
+    current_cache_size_ += item_size;
+    UpdateTransitionStats(key);
 
-            for (const auto& i : evictionCandidates) {
-                const KeyType& tmpKey = stateToKeyMap[i];
+    return false;
+  }
 
-                if (itemsInCacheSizes.count(tmpKey) != 0) {
-                    sizesAccumulator += itemsInCacheSizes[tmpKey];
-                }
+  void ProcessSetRequest(const KeyType& key, float item_size) {
+    assert(item_size <= cfg_.cache_capacity);
+    assert(item_size > 0);
 
-                if (tmpKey == key) {
-                    break;
-                }
-            }
+    // We register the new state corresponding to th element which we are saving
+    // now beforehand to determine if we could save it on disk right away
+    // without a need to free space in cache.
+    AddNewState(key, item_size);
 
-            if (sizesAccumulator <= spaceToFree) {
-                itemsNotInCacheSizes[key] = itemSize;
-                return;
-            }
+    const float space_to_free =
+        (current_cache_size_ + item_size) - cfg_.cache_capacity;
 
-            evict(spaceToFree, evictionCandidates);
+    if (space_to_free > 0) {
+      const size_t markov_chain_num_states = markov_chain_.GetNumStates();
+      const size_t markov_chain_current_state =
+          !prev_requested_item_key_state_ ? 0 : *prev_requested_item_key_state_;
+
+      Vector<float> costs(markov_chain_num_states, FillType::kZeros);
+      Vector<float> wrapped_item_sizes(item_sizes_.data(), item_sizes_.size());
+
+      if (cfg_.forecast_length == 1) {
+        // In this case we are able to use the more efficient way to make a
+        // prediction
+        markov_chain_.PredictNextState(markov_chain_current_state, &costs);
+
+        // (markov_chain_num_states - 1) state is the state corresponding to the
+        // dataset being saved. Transition probability to it is apparently zero,
+        // but most likely we don't want to instantly move it to disk. Instead,
+        // we "fix" the probability with a probability given by stats
+        // accumulator.
+        costs(markov_chain_num_states - 1) =
+            markov_chain_.GetTransitionProbabilityFromAccumulator(
+                markov_chain_current_state, markov_chain_num_states - 1);
+      } else {
+        // Fill the vector representing current state
+        Vector<float> state(markov_chain_num_states, FillType::kZeros);
+        state(markov_chain_current_state) = 1;
+
+        // Make predictions regarding forecast_length, and sum the
+        // probabilities. It is not that formal, but we interpret this as a
+        // cumulative cost of replacing by mistake.
+        for (size_t i = 0; i < cfg_.forecast_length; ++i) {
+          state = markov_chain_.PredictNextState(state);
+          costs.AddElements(state);
+        }
+      }
+
+      // Weight probabilities by the corresponding element sizes
+      costs.MulElements(wrapped_item_sizes);
+
+      // Sort costs in the ascending order
+      std::vector<size_t> eviction_candidates(costs.GetSize());
+      std::iota(eviction_candidates.begin(), eviction_candidates.end(), 0);
+
+      const size_t markov_chain_state_for_saving_item = key_to_state_map_[key];
+      std::sort(eviction_candidates.begin(), eviction_candidates.end(),
+                [&](size_t i, size_t j) {
+                  return costs(i) < costs(j) ||
+                         (costs(i) == costs(j) &&
+                          i == markov_chain_state_for_saving_item);
+                });
+
+      // Elements are being unloaded according to their indexes in the `ind`
+      // vector until the required number of bytes is freed. There might be a
+      // situation when the cost of replacing the element currently being saved
+      // is that small, so it is a candidate to replace. In such case there is
+      // no sense of replacing any elements from cache, so we just place the
+      // freshly added element to disk right away
+      float size_accumulator = 0;
+
+      for (const auto& i : eviction_candidates) {
+        const KeyType& tmp_key = state_to_key_map_[i];
+
+        if (items_in_cache_sizes_.count(tmp_key) != 0) {
+          size_accumulator += items_in_cache_sizes_[tmp_key];
         }
 
-        if (delegate) {
-            delegate->admitItem(key);
+        if (tmp_key == key) {
+          break;
         }
+      }
 
-        itemsInCacheSizes[key] = itemSize;
-        currentCacheSize += itemSize;
+      if (size_accumulator <= space_to_free) {
+        items_not_in_cache_sizes_[key] = item_size;
+        return;
+      }
+
+      Evict(space_to_free, eviction_candidates);
     }
 
-    void flush() {
-        itemsNotInCacheSizes.insert(itemsInCacheSizes.begin(), itemsInCacheSizes.end());
-        itemsInCacheSizes.clear();
-        currentCacheSize = 0;
+    if (delegate_) {
+      delegate_->AdmitItem(key);
     }
 
-    explicit MarkovChainCache(const MarkovChainCacheConfig& cfg, CacheDelegate<KeyType> *delegate = nullptr)
-        : cfg(cfg), markovChain(cfg.statsAccumulatorType, cfg.accessesThreshold), delegate(delegate) {}
+    items_in_cache_sizes_[key] = item_size;
+    current_cache_size_ += item_size;
+  }
 
-    ~MarkovChainCache() {
-        delete prevRequestedItemKeyState;
+  void Flush() {
+    items_not_in_cache_sizes_.insert(items_in_cache_sizes_.begin(),
+                                     items_in_cache_sizes_.end());
+    items_in_cache_sizes_.clear();
+    current_cache_size_ = 0;
+  }
+
+  explicit MarkovChainCache(const MarkovChainCacheConfig& cfg,
+                            CacheDelegate<KeyType>* delegate = nullptr)
+      : cfg_(cfg),
+        markov_chain_(cfg.stats_accumulator_type, cfg.accesses_threshold),
+        delegate_(delegate) {}
+
+  ~MarkovChainCache() { delete prev_requested_item_key_state_; }
+
+ private:
+  // Markov chain stuff
+  void UpdateTransitionStats(const KeyType& key) {
+    assert(key_to_state_map_.count(key) != 0);
+
+    if (!prev_requested_item_key_state_) {
+      markov_chain_.RegisterTransition(
+          !prev_requested_item_key_state_ ? 0 : *prev_requested_item_key_state_,
+          key_to_state_map_[key]);
+      prev_requested_item_key_state_ = new KeyType;
+    } else {
+      markov_chain_.RegisterTransition(*prev_requested_item_key_state_,
+                                       key_to_state_map_[key]);
     }
 
-private:
-    // Markov chain stuff
-    void updateTransitionStats(const KeyType& key) {
-        assert(keyToStateMap.count(key) != 0);
+    *prev_requested_item_key_state_ = key_to_state_map_[key];
+  }
 
-        if (!prevRequestedItemKeyState) {
-            markovChain.registerTransition(!prevRequestedItemKeyState ? 0 : *prevRequestedItemKeyState, keyToStateMap[key]);
-            prevRequestedItemKeyState = new KeyType;
-        } else {
-            markovChain.registerTransition(*prevRequestedItemKeyState, keyToStateMap[key]);
-        }
+  void AddNewState(const KeyType& key, float size) {
+    assert(key_to_state_map_.count(key) == 0);
+    assert(size > 0);
 
-        *prevRequestedItemKeyState = keyToStateMap[key];
+    key_to_state_map_[key] = markov_chain_.AddState();
+    state_to_key_map_.push_back(key);
+    item_sizes_.push_back(size);
+  }
+
+  // Frees require amount of bytes by unloading some elements from memory to
+  // disk
+  void Evict(float space_to_free,
+             const std::vector<size_t>& items_to_evict_states) {
+    assert(space_to_free <= cfg_.cache_capacity);
+    assert(space_to_free > 0);
+
+    float spaceFreed = 0;
+
+    for (const auto& state : items_to_evict_states) {
+      const KeyType& item_key = state_to_key_map_[state];
+
+      if (items_in_cache_sizes_.count(item_key) == 0) {
+        // DS is already on disk, skip this entry
+        continue;
+      }
+
+      const float tmp_size = item_sizes_[key_to_state_map_[item_key]];
+      items_not_in_cache_sizes_[item_key] = tmp_size;
+      spaceFreed += tmp_size;
+
+      if (delegate_) {
+        delegate_->EvictItem(item_key);
+      }
+
+      items_in_cache_sizes_.erase(item_key);
+
+      if (spaceFreed >= space_to_free) {
+        current_cache_size_ -= spaceFreed;
+        return;
+      }
     }
 
-    void addNewState(const KeyType& key, float size) {
-        assert(keyToStateMap.count(key) == 0);
-        assert(size > 0);
+    current_cache_size_ -= spaceFreed;
+  }
 
-        keyToStateMap[key] = markovChain.addState();
-        stateToKeyMap.push_back(key);
-        itemsSizes.push_back(size);
-    }
+  MarkovChainCacheConfig cfg_;
 
-    // Frees require amount of bytes by unloading some elements from memory to disk
-    void evict(float spaceToFree, const std::vector<size_t>& itemsToEvictStates) {
-        assert(spaceToFree <= cfg.cacheCapacity);
-        assert(spaceToFree > 0);
+  std::unordered_map<KeyType, float> items_in_cache_sizes_;
+  std::unordered_map<KeyType, float> items_not_in_cache_sizes_;
 
-        float spaceFreed = 0;
+  EvolvingMarkovChain markov_chain_;
 
-        for (const auto& state : itemsToEvictStates) {
-            const KeyType& itemKey = stateToKeyMap[state];
+  float current_cache_size_ = 0;
 
-            if (itemsInCacheSizes.count(itemKey) == 0) {
-                // DS is already on disk, skip this entry
-                continue;
-            }
+  // We use this vector for storing element sizes, because we multiply
+  // transitions probabilities by element sizes in element wise fashion in order
+  // to obtain the costs of replacing by mistake. This vector allows to do it
+  // without copying data. itemsInCacheSizes map is only used for O(1) search.
+  std::vector<float> item_sizes_;
 
-            const float tmpSize = itemsSizes[keyToStateMap[itemKey]];
-            itemsNotInCacheSizes[itemKey] = tmpSize;
-            spaceFreed += tmpSize;
+  std::unordered_map<KeyType, size_t> key_to_state_map_;
+  std::vector<KeyType> state_to_key_map_;
 
-            if (delegate) {
-                delegate->evictItem(itemKey);
-            }
+  CacheDelegate<KeyType>* delegate_ = nullptr;
 
-            itemsInCacheSizes.erase(itemKey);
-
-            if (spaceFreed >= spaceToFree) {
-                currentCacheSize -= spaceFreed;
-                return;
-            }
-        }
-
-        currentCacheSize -= spaceFreed;
-    }
-
-    MarkovChainCacheConfig cfg;
-
-    std::unordered_map<KeyType, float> itemsInCacheSizes;
-    std::unordered_map<KeyType, float> itemsNotInCacheSizes;
-
-    EvolvingMarkovChain markovChain;
-
-    float currentCacheSize = 0;
-
-    // We use this vector for storing element sizes, because we multiply transitions
-    // probabilities by element sizes in element wise fashion in order to obtain the
-    // costs of replacing by mistake. This vector allows to do it without copying data.
-    // itemsInCacheSizes map is only used for O(1) search.
-    std::vector<float> itemsSizes;
-
-    std::unordered_map<KeyType, size_t> keyToStateMap;
-    std::vector<KeyType> stateToKeyMap;
-
-    CacheDelegate<KeyType> *delegate = nullptr;
-
-    // This field store the actual state of cache in terms of Markov chain
-    KeyType *prevRequestedItemKeyState = nullptr;
+  // This field store the actual state of cache in terms of Markov chain
+  KeyType* prev_requested_item_key_state_ = nullptr;
 };
