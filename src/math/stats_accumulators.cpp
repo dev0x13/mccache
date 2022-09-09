@@ -8,8 +8,10 @@ void TransitionsBasedStatsAccumulator::AddState() {
   ++num_states_;
 
   // We initialize new length with zeros
-  total_numbers_of_forward_transitions_.push_back(0);
-  total_numbers_of_backward_transitions_.push_back(0);
+  total_numbers_of_forward_transitions_.push_back(1);
+  total_numbers_of_backward_transitions_.push_back(1);
+
+  ++total_number_of_transitions_;
 }
 
 void TransitionsBasedStatsAccumulator::AccumulateTransition(size_t state1,
@@ -92,7 +94,7 @@ float TransitionsBasedStatsAccumulator::GetTransitionProbabilityEstimate(
  *******************************/
 
 void StatesBasedStatsAccumulator::AddState() {
-  transition_counters_.push_back(0);
+  transition_counters_.push_back(1);
   ++total_number_of_transitions_;
 }
 
