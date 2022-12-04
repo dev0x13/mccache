@@ -4,7 +4,7 @@
 #include <iostream>
 
 #ifdef USE_MKL
-#include <mkl.h>
+#include <mkl/mkl.h>
 #endif
 
 struct GetRequest {

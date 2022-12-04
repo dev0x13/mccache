@@ -116,7 +116,7 @@ class MarkovChainCache {
         markov_chain_.PredictNextState(markov_chain_current_state, &costs);
 
         // (markov_chain_num_states - 1) state is the state corresponding to the
-        // dataset being saved. Transition probability to it is apparently zero,
+        // item being saved. Transition probability to it is apparently zero,
         // but most likely we don't want to instantly move it to disk. Instead,
         // we "fix" the probability with a probability given by stats
         // accumulator.

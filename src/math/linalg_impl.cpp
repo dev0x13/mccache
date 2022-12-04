@@ -3,7 +3,7 @@
 
 #ifdef USE_MKL
 
-#include <mkl.h>
+#include <mkl/mkl.h>
 
 template <>
 void Matrix<float>::TransMatMulVec(const Vector<float>& vec,
