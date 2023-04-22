@@ -28,6 +28,46 @@ std::vector<GetRequest> ParseTrace(std::ifstream& is) {
   return requests;
 }
 
+class ProgressBar {
+ private:
+  unsigned int ticks = 0;
+
+  const unsigned int totalTicks;
+  const unsigned int barWidth;
+  const char completeChar   = '=';
+  const char incompleteChar = ' ';
+
+ public:
+  ProgressBar(unsigned int total, unsigned int width) : totalTicks(total), barWidth(width) {}
+
+  unsigned int operator++() { return ++ticks; }
+
+  void display() const {
+    float progress = (float) ticks / totalTicks;
+    unsigned int pos = barWidth * progress;
+
+    std::cout << (int) (progress * 100.0) <<  "%[";
+
+    for (unsigned int i = 0; i < barWidth; ++i) {
+      if (i < pos) {
+        std::cout << completeChar;
+      } else if (i == pos) {
+        std::cout << ">";
+      } else {
+        std::cout << incompleteChar;
+      }
+    }
+
+    std::cout << "] " << ticks << '/' << totalTicks << '\r';
+    std::cout.flush();
+  }
+
+  void done() const {
+    display();
+    std::cout << std::endl;
+  }
+};
+
 int main(int argc, char* argv[]) {
   if (argc < 5) {
     std::cout << "Usage: " << argv[0]
@@ -58,9 +98,15 @@ int main(int argc, char* argv[]) {
 
   MarkovChainCache<size_t> cache(cfg);
 
+  ProgressBar pb(unique_items.size(), 100);
+
   for (const auto& item : unique_items) {
     cache.ProcessSetRequest(item.first, item.second);
+    ++pb;
+    pb.display();
   }
+
+  pb.done();
 
   cache.Flush();
 
